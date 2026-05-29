@@ -1,4 +1,4 @@
-# ShodanSnipe AI
+# ShodanSnipe AI (SANS598)
 <img width="1126" height="695" alt="image" src="https://github.com/user-attachments/assets/81b1183e-6c56-4349-802c-877460b279c3" />
 
 **An agentic attack-surface-management console.** A CrewAI team plans Shodan
