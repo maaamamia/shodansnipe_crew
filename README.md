@@ -1,412 +1,344 @@
 # ShodanSnipe AI
 <img width="1126" height="695" alt="image" src="https://github.com/user-attachments/assets/81b1183e-6c56-4349-802c-877460b279c3" />
 
-**Agentic attack surface management console powered by CrewAI, FastAPI, and Shodan.**
-
-ShodanSnipe turns Shodan into a systematic, AI-augmented recon workflow. A three-agent CrewAI crew automatically plans searches based on your scope, deduplicates findings across all queries, maps results to MITRE ATT&CK techniques, and produces an executive threat report — with Human-in-the-Loop controls at every step.
-
----
-
-## What It Does
+**An agentic attack-surface-management console.** A CrewAI team plans Shodan
+searches from your scope, confirms what's live with stealthy Nmap scans,
+triages hosts for a human specialist, cross-references CVEs, and writes an
+executive threat report — with human-in-the-loop controls at every step.
 
 ```
-You define a scope  →  Crew plans 14+ searches  →  Results deduplicated  →  MITRE-mapped intel report
-org:"Acme Corp"         Remote access, web,             Same IP across          T1133, T1190,
-hostname:acme.com       databases, TLS, admin           queries = 1 finding     risk verdict,
-net:203.0.113.0/24      panels, cloud APIs…             with merged CVEs        remediation actions
-```
-
-The web console runs locally in your browser. The CrewAI crew runs from the command line. Both talk to the same FastAPI server, which also exposes a full MCP server so any MCP-compatible AI host can use ShodanSnipe as a toolset.
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│               Browser — ShodanSnipe Console             │
-│                    http://localhost:8000                 │
-│                                                         │
-│  ┌──────────┐ ┌───────────┐ ┌─────────┐ ┌───────────┐  │
-│  │ AI       │ │ Query     │ │ Results │ │ History   │  │
-│  │ Analyst  │ │ Builder   │ │ +Filter │ │ by Search │  │
-│  │          │ │ +Library  │ │         │ │ by Scope  │  │
-│  └──────────┘ └───────────┘ └─────────┘ └───────────┘  │
-│  ┌──────────┐ ┌───────────┐ ┌─────────────────────────┐ │
-│  │ MCP      │ │ CVE Intel │ │ Findings (cross-search  │ │
-│  │ Config   │ │           │ │ dedup view)             │ │
-│  └──────────┘ └───────────┘ └─────────────────────────┘ │
-└─────────────────────────┬───────────────────────────────┘
-                          │  REST API + MCP endpoint
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│               FastAPI Server  (server.py)               │
-│                                                         │
-│  Shodan search  │  LLM endpoints  │  Session history    │
-│  Scope storage  │  CVE intel      │  Audit log          │
-│  Saved queries  │  Workspaces     │  Threat feeds       │
-│                                                         │
-│  /mcp  ←  JSON-RPC 2.0 MCP server (6 tools)            │
-│                                                         │
-│  Encrypted SQLite  (passphrase-protected at startup)    │
-└─────────────────────────┬───────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│          CrewAI Threat-Hunting Crew  (poc_crew.py)      │
-│                   run via  crewai.bat                   │
-│                                                         │
-│  MANAGER    validates scope · enforces dedup · report   │
-│  RESEARCHER 14+ dynamic searches · pivot from findings  │
-│  ANALYST    MITRE TTPs · threat actor patterns · prose  │
-│                                                         │
-│  Autonomy:  HITL  │  Scoped  │  Full Auto              │
-│  Limits:    credit-aware (200 / 100 / 50 / 25)         │
-└─────────────────────────────────────────────────────────┘
+You set a scope  →  A team of AI agents works it  →  A prioritised threat report
+org:"Acme Corp"      Recon → Nmap → Vuln → Report     + a hand-off list of the
+hostname:acme.com    (Manager orchestrates)           hosts a human should test
+net:203.0.113.0/24                                     intensively
 ```
 
 ---
 
-## Quick Start
+## Table of contents
 
-### 1. Prerequisites
+- [Quick start](#quick-start)
+- [Project structure](#project-structure)
+- [The agent team](#the-agent-team)
+- [The web console](#the-web-console)
+- [Scope configuration](#scope-configuration)
+- [The Nmap recon stage](#the-nmap-recon-stage)
+- [Autonomy modes](#autonomy-modes)
+- [MCP server](#mcp-server)
+- [Environment variables](#environment-variables)
+- [Extending the system](#extending-the-system)
+- [Troubleshooting](#troubleshooting)
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Python | 3.12 | Required for CrewAI; earlier versions have wheel issues |
-| Shodan API key | Any | Free key works; paid unlocks `vuln:`, higher limits |
-| LLM API key | Any | Anthropic, OpenAI, or local Ollama |
+---
 
-Install server dependencies:
+## Quick start
+
+### Prerequisites
+
+| Need | Version / note |
+|------|----------------|
+| Python | **3.12** (CrewAI wheel compatibility — not 3.11 or 3.13) |
+| Shodan API key | free key works; paid unlocks `vuln:` and higher limits |
+| LLM key | Anthropic, OpenAI, **or** local Ollama (no key) |
+| nmap | only for the active-recon stage — `choco/apt/brew install nmap` |
+
+### Install
 
 ```bash
-pip install fastapi uvicorn shodan requests pydantic
+pip install -r requirements.txt
 ```
 
-### 2. Start the Server
+### Run (two terminals)
 
 ```bash
-python server.py
+# Terminal 1 — start the server
+cd core
+python server.py            # prompts for a DB passphrase on first run
+
+# Terminal 2 — run the crew
+cd launchers
+setup_crewai.bat            # one-time: venv + deps + nmap check (Windows)
+crewai.bat anthropic        # reads scope + autonomy mode from the UI
 ```
 
-You will be prompted for a **passphrase** on first run — this encrypts the local database. Use the same passphrase every time. There is no recovery if lost.
+Open the console at **http://127.0.0.1:8000**.
 
-Open **http://localhost:8000** in your browser.
+> Open the console at the exact URL the server prints. Opening `index.html` as a
+> file, or from a different dev server, will break the API calls.
 
-### 3. Configure
+---
 
-Click **⚙ Config** in the top-right corner:
+## Project structure
 
-- **◈ Scope** — add your target as org name, CIDR, domain, ASN, or free-form Shodan syntax
-- **⬡ API Key** — enter your Shodan API key
-- **✦ AI Model** — choose Anthropic / OpenAI / Ollama and enter the model name and key
+```
+shodansnipe/
+│
+├── _bootstrap.py      Import-path setup — every launcher imports this first
+├── requirements.txt   pip dependencies
+├── README.md          This file
+├── STRUCTURE.md       The folder layout in detail
+├── DEPENDENCIES.md    Module interaction map + required local core modules
+│
+├── core/              The engine (rarely changes)
+│   ├── server.py            FastAPI: REST API + MCP server + DB + serves the UI
+│   ├── shodansnipe_core.py  Shodan query execution, rate limiting, risk scoring
+│   ├── llm.py               LLM client: goal→query, CVE intel, summarise
+│   └── threat_feeds.py      C2 tracker / STIX-TAXII feed crawler
+│
+├── agents/            One file per team member (see The Agent Team)
+│   ├── recon_agent.py       Attack Surface Reconnaissance Specialist
+│   ├── nmap_recon_agent.py  Stealthy Network Reconnaissance Specialist
+│   ├── vuln_agent.py        Vulnerability Intelligence Analyst
+│   ├── report_agent.py      Security Report Writer
+│   ├── example_crew.py      Assembles the team into a simple crew
+│   └── example_crew_mcp.py  Same, via the MCP adapter (auto tool discovery)
+│
+├── tools/             CrewAI tool wrappers (the agents' capabilities)
+│   ├── shodansnipe_tools.py search, results, scope, CVE, history
+│   └── nmap_tool.py         NmapDiscoveryTool, NmapTriageTool
+│
+├── skills/            How to extend the system
+│   ├── BUILDING_AGENTS.md
+│   └── BUILDING_TOOLS.md
+│
+├── launchers/         Entry points you run
+│   ├── poc_crew.py          The production orchestrator (full pipeline)
+│   ├── run_server.bat       Start the server (run first)
+│   ├── crewai.bat           Run the crew (reads scope + mode from server)
+│   └── setup_crewai.bat     One-time venv + deps + nmap check
+│
+├── static/
+│   └── index.html           The single-file web console
+│
+└── docs/
+    ├── TEAM.md              Visual roster of every agent
+    ├── CREWAI_SETUP.md      Step-by-step crew setup + env vars
+    └── sec598_submission.md SEC598 coin submission writeup
+```
 
-### 4. Run a Search
+The key architectural point: **the crew does not import the server.** They are
+separate processes that talk over HTTP (REST + the `/mcp` endpoint). That's why
+you start the server first, then run the crew.
 
-Type a Shodan query in the Query Builder panel and press **RUN**, or describe your goal in the AI Analyst panel and let it build a query queue for you.
+---
 
-### 5. Run the CrewAI Crew (optional)
+## The agent team
+
+A pipeline of specialists, each handing off to the next. The Manager
+orchestrates; a human specialist sits in the middle for intensive testing.
+
+```
+MANAGER ──────────────── validates scope, enforces order, dedups, final report
+   │
+   ├─ RECON SPECIALIST ──── passive recon: maps the attack surface (Shodan)
+   │
+   ├─ NMAP RECON ────────── active recon: confirm live + triage
+   │                        hands a prioritised list to →
+   │                        ┌─────────────────────────────────────┐
+   │                        │  SENIOR NETWORK OPERATOR  (human)    │
+   │                        │  intensive manual testing on HIGH    │
+   │                        └─────────────────────────────────────┘
+   │
+   ├─ VULN ANALYST ──────── CVE cross-reference, detection queries, severity
+   │
+   └─ REPORT WRITER ─────── synthesises everything into the executive report
+```
+
+| Agent | File | Tools | Output |
+|-------|------|-------|--------|
+| **Recon Specialist** | `recon_agent.py` | shodan_search, set_scope, get_scope | in-scope live hosts + risk |
+| **Nmap Recon** | `nmap_recon_agent.py` | nmap_discovery_scan, nmap_triage | HIGH/MED/LOW hand-off list |
+| **Vuln Analyst** | `vuln_agent.py` | cve_intel, shodan_search, get_results | CVE detection queries + verdict |
+| **Report Writer** | `report_agent.py` | get_results, get_history | executive threat report |
+
+Every agent is a standalone module exporting `build_<name>_agent(llm)` and
+`build_<name>_tasks(...)`. They are reusable, individually testable, and
+individually runnable. See `docs/TEAM.md` for full roster cards.
+
+The production orchestrator (`launchers/poc_crew.py`) additionally runs a
+Manager and a dynamic Researcher with a 14-16 search credit-aware plan; the
+`agents/example_crew.py` is a minimal reference that assembles Recon → Vuln →
+Report.
+
+### Run one agent in isolation
+
+```python
+from recon_agent import build_recon_agent, build_recon_tasks
+from crewai import Crew, Process, LLM
+llm = LLM(model="gpt-4o-mini")
+agent = build_recon_agent(llm)
+tasks = build_recon_tasks(agent, "Acme Corp", 'org:"Acme Corp"')
+Crew(agents=[agent], tasks=tasks, process=Process.sequential, verbose=True).kickoff()
+```
+
+---
+
+## The web console
+
+Served by `core/server.py` at http://127.0.0.1:8000.
+
+| Panel | What it does |
+|-------|--------------|
+| **AI Analyst** | Describe a goal in plain English; the AI builds a queue of scoped Shodan queries you approve before running. Has a persistent Guidance field and an inline scope-setter. |
+| **Query Builder** | Direct Shodan input with a filter library, templates, a live syntax validator, and diff mode. Picking a filter maps it to the active scope. |
+| **Results** | SOURCE selector (Current / All History / By Scope) + a filter bar: Risk, Scope, Port, Org, Country, Product, CVE, ASN. Sort, column picker, CSV/JSON export. |
+| **History** | Tabs: By Search, By Scope, Saved, Audit. |
+| **Findings** | Cross-search deduplication — every host counted once with merged CVEs/ports, grouped by Risk/Search/Org/Port, CSV export. |
+| **MCP Config** | Autonomy mode (HITL/Scoped/Full), scope enforcement, usage + token-cost meter, external MCP servers. |
+| **CVE Intel** | Paste any advisory → extracted CVE IDs, severity, and scoped detection queries. |
+
+The **⚙ Config** dropdown (top-right) has three tabs: **Scope** (multi-tag
+builder + free-form query), **API Key** (Shodan key + server URL), **AI Model**
+(provider, model picker, key, live cost estimate, test-connection).
+
+---
+
+## Scope configuration
+
+Open **⚙ Config → Scope**. Add any mix of target types:
+
+| Input | Becomes |
+|-------|---------|
+| `Acme Corp` | `org:"Acme Corp"` |
+| `acme.com` | `hostname:acme.com` |
+| `203.0.113.0/24` | `net:203.0.113.0/24` |
+| `AS64512` | `AS64512` |
+| free-form box | appended verbatim (e.g. `http.title:"Login" country:US`) |
+
+All terms combine into one query, shown live in the preview. Scope is stored
+server-side, so the console, the crew, and `crewai.bat` all share the same
+target. Picking a filter from the builder, and every AI-generated query, is
+auto-scoped to this target.
+
+---
+
+## The Nmap recon stage
+
+Sits between passive Shodan recon and the human specialist. It confirms what's
+*actually* live (Shodan data can be stale), then produces a ranked hand-off so
+the specialist spends intensive-testing time where it matters.
+
+- **Stealthy by default** — SYN scan, `-T2` timing, top-100 ports.
+- **Discovery only** — no exploits, no brute force, no intrusive scripts.
+- **Scope enforced in code** — refuses to scan any IP outside the active scope.
+- **Capped** — max 10 hosts per call, with timeouts.
+
+Toggle it:
 
 ```bat
-# One-time setup
-setup_crewai.bat
-
-# Run the crew (reads scope and autonomy mode from the running server)
-crewai.bat anthropic          # Claude, mode from UI
-crewai.bat openai             # OpenAI, mode from UI
-crewai.bat anthropic scoped   # Override to scoped autonomous
-crewai.bat anthropic full     # Override to full autonomous
+set ENABLE_NMAP=1     REM active scanning ON (default if nmap installed)
+set ENABLE_NMAP=0     REM passive Shodan only
 ```
 
-> **Note:** Do not include a leading dash — use `crewai.bat anthropic` not `crewai.bat -anthropic`
+The triage output ranks hosts HIGH/MEDIUM/LOW and recommends what the
+specialist should look at first — the intensive-testing decision stays human.
 
 ---
 
-## File Reference
+## Autonomy modes
 
-| File | Purpose |
-|------|---------|
-| `server.py` | FastAPI backend — all API endpoints, MCP server, DB management |
-| `index.html` | Single-file web console — drop into `static/` folder |
-| `shodansnipe_core.py` | Shodan query engine — rate limiting, result serialisation, risk scoring |
-| `llm.py` | LLM abstraction — goal-to-query, CVE intel, summarise, rank, explain |
-| `threat_feeds.py` | C2 tracker and STIX/TAXII feed crawler |
-| `poc_crew.py` | Three-agent CrewAI crew with dynamic search plan |
-| `shodansnipe_tools.py` | CrewAI `BaseTool` wrappers for the REST API |
-| `example_crew.py` | Simple example crew using tool wrappers |
-| `example_crew_mcp.py` | Example crew using the MCP adapter (auto-discovers tools) |
-| `crewai.bat` | Windows launcher — reads scope + mode from server, runs crew |
-| `setup_crewai.bat` | One-time Python 3.12 venv setup for CrewAI |
-
----
-
-## Web Console Panels
-
-### AI Analyst
-Type your goal in plain English. The AI builds a queue of validated Shodan queries — you approve before anything runs (or set autonomous mode to skip approval). Includes a persistent **Guidance** field where you can store context that applies to all sessions ("We use AWS and Azure, prioritise RDP exposure, our ASN is AS64512").
-
-### Query Builder
-Direct Shodan query input with:
-- Filter library (30+ categorised filters, tier-aware)
-- Template library with parameterised templates
-- Live syntax validator that catches OR/AND/NOT, wildcards, and paid-filter violations before you run
-- Diff mode — compare against a previous snapshot to see what changed
-
-### Results
-- **SOURCE selector**: Current Search / All History / By Scope — load any historical results into the table without re-running searches
-- **Filter bar**: Risk · Scope · Port · Org · Country · Product · CVE · ASN — all populate dynamically from the loaded results
-- **Text search**: searches across IP, org, CVE, hostname, banner, SSL subject, tags
-- Sortable columns, column picker, CSV/JSON export
-
-### History
-Four tabs: By Search (with live filter) · By Scope (grouped by active scope at run time) · Saved · Audit Log
-
-### Findings
-Cross-search deduplication view. Click **Load All** to pull every historical search, merge by IP address (same IP across 10 searches = 1 entry with combined CVEs and ports), and display grouped by Risk / Search / Org / Port. Includes a Search filter chip and CSV export.
-
-### MCP Config
-Three tabs:
-- **Settings**: MCP Autonomy Mode (HITL / Scoped / Full Auto), scope enforcement, Shodan Snipe autonomy flag, crew agent role reference, usage & limits (Shodan credits + session token cost with per-model pricing)
-- **MCP**: External MCP server configuration — push results, queries, and audit logs to other MCP endpoints
-
-### CVE Intel
-Paste any CVE advisory, NVD entry, vendor bulletin, or threat intel article. The AI extracts CVE IDs, severity, affected products, and generates scoped Shodan detection queries. Queries can be auto-queued for approval or saved.
-
----
-
-## Scope Configuration
-
-The **◈ Scope** tab in the ⚙ Config dropdown is a multi-tag builder:
-
-**Structured tags** — type any value and press Enter or comma to add it as a typed tag:
-
-| Input | Auto-detected type | Shodan query |
-|-------|-------------------|--------------|
-| `Acme Corp` | org | `org:"Acme Corp"` |
-| `acme.com` | hostname | `hostname:acme.com` |
-| `203.0.113.0/24` | CIDR | `net:203.0.113.0/24` |
-| `AS64512` | ASN | `AS64512` |
-| `ssl.cert.subject.cn:acme.com` | ssl | appended verbatim |
-
-Tags show as coloured pills with a × to remove. Use the **Quick Add** buttons (+ org, + net, + hostname, + ASN, + SSL cert) to be prompted for each type.
-
-**Free-form query** — a second textarea below the tags for raw Shodan syntax that cannot be expressed as a typed tag:
-
-```
-http.title:"Login" country:US -org:"Cloudflare" port:8443
-```
-
-This is appended verbatim to the structured tags. Supports all Shodan filter fields.
-
-The **Shodan Query Preview** shows the combined query live as you type. Scope is stored server-side so `crewai.bat`, the crew, and the UI all share the same target without manual configuration.
-
----
-
-## CrewAI Crew
-
-### Three Agents
-
-**MANAGER** — validates scope before any search runs; if scope is undefined, the crew stops and asks. Enforces deduplication in the final report (same IP across multiple searches = one finding with merged ports and CVEs). Produces the executive report.
-
-**RESEARCHER** — runs a dynamic search plan built from the scope at runtime (not static templates). Pivots based on actual findings:
-- Found an Apache version → checks that version against known CVEs
-- Found an SSL cert subject → searches `hostname:<cert-cn>`
-- Found an unexpected ASN → searches `asn:AS<number>`
-- Found open management ports → investigates what services are running
-
-**ANALYST** — reads the deduplicated results and writes 3-4 paragraphs of threat intelligence prose. Maps to specific MITRE ATT&CK technique IDs (T1133, T1190 etc) based on what was actually found. Attributes threat actor patterns where evidence supports it. Never uses bullet-list templates.
-
-### Dynamic Search Plan
-
-The Researcher runs 14-16 searches per session, generated from the scope:
-
-| Category | What it checks |
-|----------|---------------|
-| Full scope surface | All scope terms combined — baseline exposure |
-| Scope atoms | Each org/CIDR/ASN/hostname searched separately |
-| Remote access | SSH (22), RDP (3389), VNC (5900), Telnet (23), FTP (21) |
-| Web services | Ports 80, 443, 8080, 8443, 8000, 8888 |
-| Databases | MySQL, Postgres, MSSQL, MongoDB, Redis, Elasticsearch |
-| TLS | Expired SSL certificates |
-| HTTP titles | Login pages, admin interfaces, dashboards |
-| Products | Apache, Nginx, OpenSSH |
-| Cloud/DevOps | Docker API (2375), Kubernetes API (6443) |
-| Network devices | SNMP (161/162), Telnet |
-
-### Credit-Aware Limits
-
-The crew checks available Shodan query credits before starting and sets the result limit per search accordingly:
-
-| Credits remaining | Result limit |
-|-------------------|-------------|
-| > 80% | 200 |
-| 50 – 80% | 100 |
-| 20 – 50% | 50 |
-| < 20% | 25 |
-| Unknown / free tier | 100 |
-
-### Autonomy Modes
-
-Set in the web UI under **MCP Config → Settings** or via `crewai.bat` argument:
+Set in **MCP Config → Settings**, or override on the command line. The mode is
+stored server-side and read by `crewai.bat` at startup.
 
 | Mode | Behaviour |
 |------|-----------|
-| **HITL** (default) | Every action prints a confirmation prompt — `y` to approve, `n` to skip |
-| **Scoped** | Auto-approves all actions; scope was validated at startup |
-| **Full Auto** | No confirmation; bat asks for written "yes" before starting; audit log always on |
+| **HITL** (default) | every action requires your `y/n` approval |
+| **Scoped** | auto-approves actions within the defined scope |
+| **Full Auto** | no prompts; bat asks for written confirmation; audit log always on |
 
-The selected mode is stored server-side and read by `crewai.bat` at startup — no need to pass an argument unless overriding.
+```bat
+crewai.bat anthropic          REM mode from the UI
+crewai.bat anthropic scoped   REM override to scoped
+crewai.bat anthropic full     REM override to full auto
+```
 
 ---
 
-## MCP Server
+## MCP server
 
-ShodanSnipe exposes a JSON-RPC 2.0 MCP endpoint at `http://localhost:8000/mcp`.
+`core/server.py` exposes a JSON-RPC 2.0 MCP endpoint at
+`http://127.0.0.1:8000/mcp` with six tools: `shodan_search`, `get_results`,
+`get_scope`, `set_scope`, `get_history`, `cve_intel`.
 
-### Available Tools
-
-| Tool | Description |
-|------|-------------|
-| `shodan_search` | Run a Shodan query — returns hosts with ports, CVEs, org, risk score |
-| `get_results` | Return current in-memory results from the last search |
-| `get_scope` | Return the active scope definition (orgs, CIDRs, ASNs, domains) |
-| `set_scope` | Set scope from plain text — server parses automatically |
-| `get_history` | Return recent search history with result counts |
-| `cve_intel` | Analyse a CVE advisory → scoped Shodan detection queries |
-
-### Using with Claude Desktop / Cursor / Windsurf
-
-Add to your MCP host config:
-
+**Claude Desktop / Cursor / Windsurf:**
 ```json
-{
-  "mcpServers": {
-    "shodansnipe": {
-      "url": "http://localhost:8000/mcp"
-    }
-  }
-}
+{ "mcpServers": { "shodansnipe": { "url": "http://127.0.0.1:8000/mcp" } } }
 ```
 
-### Using with CrewAI (MCP Adapter)
-
-```python
-from crewai import Agent, Crew, Task
-from crewai.mcp import MCPServerAdapter
-
-with MCPServerAdapter({"url": "http://localhost:8000/mcp"}) as tools:
-    print(f"Discovered {len(tools)} tools: {[t.name for t in tools]}")
-
-    analyst = Agent(
-        role="Threat Analyst",
-        goal="Map the attack surface of Acme Corp",
-        backstory="Senior red team operator.",
-        tools=tools,
-    )
-
-    task = Task(
-        description='Set scope to "Acme Corp", run surface scan, report findings.',
-        expected_output="Prioritised list of exposed hosts with risk levels.",
-        agent=analyst,
-    )
-
-    Crew(agents=[analyst], tasks=[task]).kickoff()
-```
-
-### Using with CrewAI (Tool Wrappers — no MCP required)
-
-```python
-from shodansnipe_tools import (
-    ShodanSearchTool, GetResultsTool, SetScopeTool,
-    GetScopeTool, CVEIntelTool, GetHistoryTool,
-)
-
-tools = [
-    ShodanSearchTool(),
-    GetResultsTool(),
-    SetScopeTool(),
-    GetScopeTool(),
-    CVEIntelTool(),
-    GetHistoryTool(),
-]
-
-agent = Agent(role="...", goal="...", backstory="...", tools=tools)
-```
+**CrewAI (auto tool discovery):** see `agents/example_crew_mcp.py` — it uses
+`MCPServerAdapter` to discover all six tools without writing wrappers.
 
 ---
 
-## Shodan Tier Reference
+## Environment variables
 
-| Feature | Free | Member ($49) | Corporate |
-|---------|------|-------------|-----------|
-| Basic filters (`org:`, `port:`, `hostname:`) | ✓ | ✓ | ✓ |
-| `vuln:CVE-XXXX` matching | ✗ | ✓ | ✓ |
-| `has_vuln:true` | ✗ | ✓ | ✓ |
-| `has_screenshot:true` | ✗ | ✓ | ✓ |
-| `tag:` filter | ✗ | ✗ | ✓ |
-| Results per search | 100 | 1,000 | 10,000+ |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ANTHROPIC_API_KEY` | — | Anthropic key (set before running the crew) |
+| `OPENAI_API_KEY` | — | OpenAI key |
+| `OLLAMA_URL` | `http://localhost:11434/v1` | local Ollama endpoint |
+| `LLM_PROVIDER` | `openai` | `anthropic` / `openai` / `ollama` |
+| `SHODANSNIPE_URL` | `http://127.0.0.1:8000` | server URL the crew talks to |
+| `SHODANSNIPE_PASSPHRASE` | *(prompt)* | DB passphrase — set to skip the prompt |
+| `MCP_AUTONOMY_MODE` | `hitl` | `hitl` / `scoped` / `full` |
+| `ENABLE_NMAP` | `1` | `0` = passive Shodan only |
+| `TARGET_ORG` / `TARGET_SCOPE` | *(from server)* | set automatically by `crewai.bat` |
+| `CVE_ADVISORY` | — | optional CVE text for the Vuln Analyst |
 
-The console shows your plan tier in the topbar and dims paid filters you cannot use.
+Set permanently in PowerShell:
+```powershell
+[System.Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY","sk-ant-...","User")
+```
 
----
-
-## AI Configuration
-
-Supported providers (set under **⚙ Config → ✦ AI Model**):
-
-| Provider | Models | Notes |
-|----------|--------|-------|
-| **Anthropic** | `claude-sonnet-4-6`, `claude-haiku-4-5`, `claude-opus-4-6` | Recommended — best query generation quality |
-| **OpenAI** | `gpt-4o`, `gpt-4o-mini` | Good alternative |
-| **Ollama** | `llama3.2`, any local model | Free; quality varies; set endpoint URL |
-
-Estimated token cost per session is shown in the MCP Config settings tile and in the topbar token counter.
+See `docs/CREWAI_SETUP.md` for the full env-var walkthrough.
 
 ---
 
-## Environment Variables
+## Extending the system
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SHODANSNIPE_URL` | `http://127.0.0.1:8000` | Server URL for CrewAI tools |
-| `SHODANSNIPE_PASSPHRASE` | *(prompt)* | DB encryption passphrase (skip interactive prompt) |
-| `ANTHROPIC_API_KEY` | — | Anthropic API key |
-| `OPENAI_API_KEY` | — | OpenAI API key |
-| `OLLAMA_URL` | `http://localhost:11434/v1` | Ollama endpoint |
-| `LLM_PROVIDER` | `openai` | Default LLM for the crew (`anthropic` / `openai` / `ollama`) |
-| `MCP_AUTONOMY_MODE` | `hitl` | Crew autonomy mode (`hitl` / `scoped` / `full`) |
-| `TARGET_ORG` | *(prompt)* | Target org — set by `crewai.bat` from server scope |
-| `TARGET_SCOPE` | *(prompt)* | Full scope query — set by `crewai.bat` from server scope |
-| `CVE_ADVISORY` | — | Optional CVE text to include in analyst task |
+Adding a capability is always the same shape:
+
+1. **Tool** — a `BaseTool` in `tools/` (see `skills/BUILDING_TOOLS.md`)
+2. **Agent** — a module in `agents/` exporting `build_*_agent` / `build_*_tasks`
+   (see `skills/BUILDING_AGENTS.md`)
+3. **Wire it** — import and insert into `launchers/poc_crew.py` at the right
+   pipeline position
+4. **Test in isolation**, then run the full crew
+
+The four agents are your worked examples — copy their shape. Safety rules:
+enforce scope in code (not just prompts), return strings from tools (never
+raise), and keep destructive/intensive actions under human control.
 
 ---
 
 ## Troubleshooting
 
-**Page loads but filters/templates are empty**  
-The Query Builder's library falls back to built-in filters if the server returns nothing. Open the Query panel — filters appear in the FILTERS tab. If they are still blank, check that `server.py` is running and `/api/filters` returns JSON.
+**`Unexpected token` / functions "not defined" in the console**
+A stale `static/index.html` is being served. Replace it and hard-refresh
+(Ctrl+Shift+R).
 
-**`crewai.bat anthropic` shows `LLM: -anthropic`**  
-Do not include a leading dash. Use `crewai.bat anthropic` not `crewai.bat -anthropic`.
+**Console can't reach the API / 404 HTML page**
+You opened the page from the wrong origin. Use the exact URL the server prints
+(`http://127.0.0.1:8000`). Or set the server URL in ⚙ Config → API Key.
 
-**Autonomy mode always shows HITL despite UI setting**  
-The server needs the new `/api/config/autonomy` endpoint — use the updated `server.py` from this release. The UI POSTs the mode to the server when you click a radio button.
+**`crewai.bat` shows `LLM: -anthropic`**
+Drop the leading dash: `crewai.bat anthropic`, not `-anthropic`.
 
-**Scope shows empty in crew even though it is set in UI**  
-The `crewai.bat` PowerShell scope-fetch writes to a temp file and reads back `SCOPE_NAME` and `SCOPE_QUERY` — check that PowerShell execution is not blocked. Run `crewai.bat` from a terminal where PowerShell is available.
+**Autonomy stuck on HITL after picking Scoped in the UI**
+Confirm the server has the endpoint: `curl http://127.0.0.1:8000/api/config/autonomy`.
 
-**`await is only valid in async functions` on page load**  
-This error means a stale `index.html` is being served. Replace `static/index.html` with the latest version and hard-refresh the browser (Ctrl+Shift+R).
+**`ImportError` for `db`, `scope`, `diff_store`, or `query_advisor`**
+These are local `core/` modules. Copy your existing copies into `core/`
+alongside `server.py`. See `DEPENDENCIES.md`.
 
-**DB passphrase prompt hangs when running as a service**  
-Set `SHODANSNIPE_PASSPHRASE` as an environment variable to skip the interactive prompt.
+**`[NMAP] disabled` when you expected it on**
+Either `ENABLE_NMAP=0` or nmap isn't installed/on PATH. Install nmap or run
+passive-only.
 
----
-
-## Licence
-
-MIT — see `LICENSE` for details.
+**`litellm: could not pre-load bedrock-runtime` warnings**
+Harmless — `botocore` isn't installed and you aren't using Bedrock.
 
 ---
 
 *Built for SEC598 · SANS Institute · Attack Surface Management + Agentic AI*
+
