@@ -1,9 +1,7 @@
 # ShodanSnipe AI (SANS598)
-<img width="1126" height="695" alt="image" src="https://github.com/user-attachments/assets/81b1183e-6c56-4349-802c-877460b279c3" />
-
 **An agentic attack-surface-management console.** A CrewAI team plans Shodan
 searches from your scope, confirms what's live with stealthy Nmap scans,
-triages hosts for a human specialist, cross-references CVEs, and writes an
+triages hosts for a human specialist, cross-references amd creates searches based on CVEs, and writes an
 executive threat report — with human-in-the-loop controls at every step.
 
 ```
