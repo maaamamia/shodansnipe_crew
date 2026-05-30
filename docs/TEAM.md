@@ -28,11 +28,6 @@ isolation, and assembled into the pipeline by the orchestrator
    │                           │  → HIGH/MED/LOW hand-off list
    └───────────┬──────────────┘
                │  hand-off ↓
-        ┌──────────────────────────────────────┐
-        │  SENIOR NETWORK OPERATOR  (human)     │
-        │  intensive manual testing on HIGH     │
-        │  hosts — stays under human control    │
-        └──────────────────────────────────────┘
                ▼
    ┌──────────────────────────┐
    │  3. VULN ANALYST          │  agents/vuln_agent.py
