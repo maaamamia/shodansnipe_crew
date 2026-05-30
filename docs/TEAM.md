@@ -101,7 +101,7 @@ from recon_agent import build_recon_agent, build_recon_tasks
 from crewai import Crew, Process, LLM
 llm = LLM(model="gpt-4o-mini")
 agent = build_recon_agent(llm)
-tasks = build_recon_tasks(agent, "Dell", 'org:"Dell"')
+tasks = build_recon_tasks(agent, "Acme", 'org:"Acme"')
 Crew(agents=[agent], tasks=tasks, process=Process.sequential, verbose=True).kickoff()
 ```
 
