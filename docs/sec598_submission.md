@@ -83,7 +83,7 @@ Raw Shodan results are lists of IPs. They do not automatically map to MITRE ATT&
               ▼
 ┌─────────────────────────────────────────────────────┐
 │           CrewAI Threat-Hunting Crew                │
-│                  (poc_crew.py)                      │
+
 │                                                     │
 │  MANAGER Agent                                      │
 │  ├─ Validates scope before any search               │
@@ -120,8 +120,7 @@ Raw Shodan results are lists of IPs. They do not automatically map to MITRE ATT&
 | `crewai.bat` | Windows launcher — reads scope + autonomy mode from running server |
 | `llm.py` | LLM abstraction — goal-to-query, ask, summarise, CVE intel, cluster analysis |
 | `threat_feeds.py` | C2 tracker / STIX/TAXII feed integration |
-| `example_crew.py` | Simple crew example using BaseTool wrappers |
-| `example_crew_mcp.py` | MCP adapter crew — auto-discovers tools from /mcp endpoint |
+
 
 ### Key SEC598 Concepts Used
 
