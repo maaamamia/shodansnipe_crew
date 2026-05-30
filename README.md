@@ -1,4 +1,4 @@
-# ShodanSnipe AI (SANS598)
+# ShodanSnipe Crew 
 **An agentic attack-surface-management console.** A CrewAI team plans Shodan
 searches from your scope, confirms what's live with stealthy Nmap scans,
 triages hosts ,cross-references amd creates searches based on CVEs, and writes an
