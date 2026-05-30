@@ -2,9 +2,57 @@
 **An agentic attack-surface-management console.** A CrewAI team plans Shodan
 searches from your scope, confirms what's live with stealthy Nmap scans,
 triages hosts ,cross-references amd creates searches based on CVEs, and writes an
-executive threat report with human-in-the-loop or autonomous controls. Full autonomous is still under development and will be used for mass analysis for target intelligence.
+executive threat report with human-in-the-loop or autonomous controls. Full autonomous is still under development and will be used for mass analysis for target.
 
-This tool is still under active develoment so dont foeget to watch this project.
+The beneift of  MCP + CrewAI is that it automates reconnaissance and attack surface discovery through specialized AI security agents.
+
+It continuously surfaces exposed assets, enriches them with vulnerability and threat intelligence context, and converts everything into structured, actionable reports.
+
+MANAGER
+   ↓
+RECON
+   ↓
+NMAP RECON
+   ↓
+VULN ANALYST
+   ↓
+REPORT WRITER
+
+(PERSONA_ASM)
+Role: Attack Surface Management Assessor
+
+Focus Areas
+
+* Internet-exposed assets
+* Misconfigurations
+* Shadow IT
+* Outdated software and EOL products
+* Certificate hygiene
+* Easy-to-fix high-impact issues
+
+(PERSONA_TI)
+Role: Threat Intelligence Analyst
+
+Focus Areas
+
+* C2 infrastructure
+* Malware infrastructure
+* Threat actor attribution or Analysis on what threat actor is likely to target you. 
+* IOC enrichment
+* ATT&CK mapping
+* Infrastructure pivoting
+
+Security Report Writer
+
+Purpose
+
+* Consumes all findings from previous agents.
+* Produces the final human-readable report.
+* Prioritizes and organizes issues.
+* Eliminates duplicate findings.
+* Converts technical output into executive and technical narratives.
+ 
+This tool is still under active develoment so dont forget to watch this project.
 ```
 You set a scope  →  A team of AI agents works it  →  A prioritised threat report
 org:"Acme Corp"      Recon → Nmap → Vuln → Report     + a hand-off list of the
