@@ -131,9 +131,10 @@ MANAGER ──────────────── validates scope, enforc
    │
    ├─ RECON SPECIALIST ──── passive recon: maps the attack surface (Shodan)
    │
-   ├─ NMAP RECON ────────── active recon: confirm live | stealthy if confirmed active defenses | intense scan if no protections detected. 
-   │                        
-   │                        └─────────────────────────────────────┘
+   ├─ NMAP RECON ────────── active recon: confirm live
+   |                        stealthy if confirmed active defenses 
+   |                        intense scan if no protections detected. 
+   │               
    │
    ├─ VULN ANALYST ──────── CVE cross-reference, detection queries, severity
    │
