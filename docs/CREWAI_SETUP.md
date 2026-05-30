@@ -385,7 +385,7 @@ pip install some-package
 
 ---
 
-## Running Without the bat (Advanced)
+## Running Without the bat (if your setup supports it)
 
 If you want to run `poc_crew.py` directly without the bat — for debugging, or on Linux/Mac:
 
