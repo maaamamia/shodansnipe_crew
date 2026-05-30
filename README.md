@@ -2,7 +2,7 @@
 **An agentic attack-surface-management console.** A CrewAI team plans Shodan
 searches from your scope, confirms what's live with stealthy Nmap scans,
 triages hosts for a human specialist, cross-references amd creates searches based on CVEs, and writes an
-executive threat report — with human-in-the-loop controls at every step.
+executive threat report — with human-in-the-loop controls. Full autonomouse is still under development and will he used for global intelligence queued for next version.
 
 This tool is still under active develoment so dont foeget to watch this project.
 ```
