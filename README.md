@@ -4,6 +4,8 @@ searches from your scope, confirms what's live with stealthy Nmap scans,
 triages hosts for a human specialist, cross-references amd creates searches based on CVEs, and writes an
 executive threat report — with human-in-the-loop controls at every step.
 
+This tool is still under active develoment so more capabilities and user experience will improve over time. 
+
 ```
 You set a scope  →  A team of AI agents works it  →  A prioritised threat report
 org:"Acme Corp"      Recon → Nmap → Vuln → Report     + a hand-off list of the
