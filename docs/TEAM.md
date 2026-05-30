@@ -2,8 +2,7 @@
 
 Every agent is a standalone module in `agents/`. Each is reusable, testable in
 isolation, and assembled into the pipeline by the orchestrator
-(`launchers/poc_crew.py` OR `launchers/crewai.bat`) or the reference crew (`agents/example_crew.py`).
-
+(`launchers/poc_crew.py` OR `launchers/crewai.bat`).
 ---
 
 ## The pipeline at a glance
